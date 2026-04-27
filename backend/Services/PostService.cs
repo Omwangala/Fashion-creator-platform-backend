@@ -1,9 +1,10 @@
-using backend.Data;
+﻿using backend.Data;
 using backend.DTOs;
 using backend.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace backend.Services
 {
@@ -22,25 +23,22 @@ namespace backend.Services
             {
                 MediaUrl = dto.MediaUrl,
                 Caption = dto.Caption,
-                MediaType = dto.MediaType
+                MediaType = dto.MediaType,
+                UserId = dto.UserId, // 🔗 Linking to the creator
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
-            return new PostResponseDto
-            {
-                Id = post.Id,
-                MediaUrl = post.MediaUrl,
-                Caption = post.Caption,
-                MediaType = post.MediaType,
-                CreatedAt = post.CreatedAt
-            };
+            // Fetch again with Include to get the Username for the response
+            return await GetPostByIdAsync(post.Id);
         }
 
         public async Task<List<PostResponseDto>> GetAllPostsAsync()
         {
             return await _context.Posts
+                .Include(p => p.User) // 🔑 Still join the table
                 .OrderByDescending(p => p.CreatedAt)
                 .Select(p => new PostResponseDto
                 {
@@ -48,14 +46,18 @@ namespace backend.Services
                     MediaUrl = p.MediaUrl,
                     Caption = p.Caption,
                     MediaType = p.MediaType,
-                    CreatedAt = p.CreatedAt
+                    CreatedAt = p.CreatedAt,
+                    // 🛡️ Safe check: if User is null, show "Vogue Guest" or "Legacy"
+                    Username = p.User != null ? p.User.Username : "Vogue Creator"
                 })
                 .ToListAsync();
         }
 
         public async Task<PostResponseDto> GetPostByIdAsync(int id)
         {
-            var post = await _context.Posts.FindAsync(id);
+            var post = await _context.Posts
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.Id == id);
 
             if (post == null) return null;
 
@@ -65,7 +67,8 @@ namespace backend.Services
                 MediaUrl = post.MediaUrl,
                 Caption = post.Caption,
                 MediaType = post.MediaType,
-                CreatedAt = post.CreatedAt
+                CreatedAt = post.CreatedAt,
+                Username = post.User.Username
             };
         }
     }

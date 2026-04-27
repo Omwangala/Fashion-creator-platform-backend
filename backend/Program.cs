@@ -111,11 +111,12 @@ builder.Services.AddCors(options => {
 });
 
 var app = builder.Build(); // The tool looks for this line!
+app.UseCors("VogueVaultPolicy");
 
 // 2. Configure the Pipeline (The "Middleware" part)
 //if (app.Environment.IsDevelopment())
 //{
-    app.UseSwagger();
+app.UseSwagger();
     app.UseSwaggerUI();
 //}
 
