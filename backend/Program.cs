@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Text;
 using Microsoft.IdentityModel.Tokens; // Also needed for SymmetricSecurityKey
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,13 +31,23 @@ builder.Services.AddSingleton(provider =>
         config.ApiSecret
     ));
 });
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("LoginPolicy", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1); // 1 minute window
+        opt.PermitLimit = 5;                  // Only 5 attempts per window
+        opt.QueueLimit = 0;                   // Don't queue requests, reject them
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
+});
+// 1. Add Authentication services
 builder.Services.AddAuthentication(options =>
 {
-    // These three lines tell .NET: "If you see a request, assume it's a JWT"
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-})
+}) // <-- NO SEMICOLON HERE
 .AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
@@ -45,7 +57,16 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuer = false,
         ValidateAudience = false
     };
-});
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            context.Token = context.Request.Cookies["vault_session"];
+            return Task.CompletedTask;
+        }
+    };
+}); 
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddControllers();
 builder.Services.AddScoped<ITokenService, TokenService>();
@@ -80,6 +101,14 @@ builder.Services.AddSwaggerGen(opt =>
         }
     });
 });
+builder.Services.AddCors(options => {
+    options.AddPolicy("VogueVaultPolicy", policy => {
+        policy.WithOrigins("http://your-frontend-url.com") // Replace with your actual frontend URL
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials(); // <--- CRITICAL for Cookies
+    });
+});
 
 var app = builder.Build(); // The tool looks for this line!
 
@@ -91,6 +120,7 @@ var app = builder.Build(); // The tool looks for this line!
 //}
 
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
