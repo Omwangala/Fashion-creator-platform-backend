@@ -51,6 +51,19 @@ namespace backend.Controllers
 
             return Ok(new { message = "Access credentials created." });
         }
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            var username = User.Identity?.Name;
+            var user = await _context.Users
+                .Select(u => new { u.Id, u.Username, u.Email })
+                .FirstOrDefaultAsync(u => u.Username == username);
+
+            if (user == null) return Unauthorized();
+
+            return Ok(user);
+        }
         [EnableRateLimiting("LoginPolicy")]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
@@ -71,6 +84,12 @@ namespace backend.Controllers
             AppendAuthCookie(token);
 
             return Ok(new { message = "Access Granted." });
+        }
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            Response.Cookies.Delete("vault_session"); // Must match your cookie name
+            return NoContent();
         }
 
         // Helper method to keep the main logic clean
