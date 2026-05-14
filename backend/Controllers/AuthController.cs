@@ -7,6 +7,7 @@ using backend.Data;
 using backend.Models;
 using backend.Services;
 using backend.DTOs; // <--- This points to your new separate DTO files
+using Microsoft.AspNetCore.Authorization;
 
 namespace backend.Controllers
 {
@@ -24,7 +25,7 @@ namespace backend.Controllers
             _tokenService = tokenService;
         }
 
-        [HttpPost("signup")]
+        [HttpPost("register")]
         public async Task<IActionResult> SignUp([FromBody] RegisterDto registerDto)
         {
             // Normalization: Convert to lowercase to prevent duplicate accounts with different casing

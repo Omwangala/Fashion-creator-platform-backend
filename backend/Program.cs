@@ -103,7 +103,7 @@ builder.Services.AddSwaggerGen(opt =>
 });
 builder.Services.AddCors(options => {
     options.AddPolicy("VogueVaultPolicy", policy => {
-        policy.WithOrigins("http://your-frontend-url.com") // Replace with your actual frontend URL
+        policy.WithOrigins("frontendUrl") 
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials(); // <--- CRITICAL for Cookies
