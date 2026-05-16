@@ -31,9 +31,8 @@ namespace backend.Controllers
             var username = User.Identity?.Name;
 
             // 2. Find the user in the DB to get their ID
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return Unauthorized();
-
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out int userId)) return Unauthorized(); 
             var mediaUrl = await _imageService.UploadImageAsync(request.File);
 
             var dto = new CreatePostDto
