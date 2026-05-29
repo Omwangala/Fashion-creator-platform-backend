@@ -1,4 +1,4 @@
-using backend.Data;
+﻿using backend.Data;
 using backend.Services;
 using CloudinaryDotNet;
 using backend.Config;
@@ -6,148 +6,211 @@ using backend.Hubs;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
+//  Bootstrap Serilog immediately — catches startup crashes too
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-// Database
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-//  Cloudinary
-builder.Services.Configure<CloudinarySettings>(
-    builder.Configuration.GetSection("CloudinarySettings"));
-
-builder.Services.AddSingleton(provider =>
+try
 {
-    var config = provider.GetRequiredService<IOptions<CloudinarySettings>>().Value;
-    return new Cloudinary(new Account(
-        config.CloudName,
-        config.ApiKey,
-        config.ApiSecret
-    ));
-});
+    Log.Information("VogueVault backend starting up...");
 
-//  Rate Limiting
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddFixedWindowLimiter("LoginPolicy", opt =>
+    var builder = WebApplication.CreateBuilder(args);
+
+    // ✅ 2. Replace default .NET logging with Serilog
+    builder.Host.UseSerilog((ctx, config) =>
+        config.WriteTo.Console()
+              .ReadFrom.Configuration(ctx.Configuration));
+
+    // Database
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+    // Cloudinary
+    builder.Services.Configure<CloudinarySettings>(
+        builder.Configuration.GetSection("CloudinarySettings"));
+
+    builder.Services.AddSingleton(provider =>
     {
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 5;
-        opt.QueueLimit = 0;
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        var config = provider.GetRequiredService<IOptions<CloudinarySettings>>().Value;
+        return new Cloudinary(new Account(
+            config.CloudName,
+            config.ApiKey,
+            config.ApiSecret
+        ));
     });
 
-    //  Return 429 instead of 503 on rate limit hit
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-});
-
-//  JWT � null-safe secret, fails fast at startup
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("JWT key is not configured. Add 'Jwt:Key' to appsettings.");
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+    //  Rate Limiting — LoginPolicy + GeneralPolicy with custom rejection response
+    builder.Services.AddRateLimiter(options =>
     {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)), // safe
-        ValidateIssuer = false,
-        ValidateAudience = false,
-        ClockSkew = TimeSpan.Zero //  tokens expire exactly on time, not 5 min late
-    };
-
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
+        options.AddFixedWindowLimiter("LoginPolicy", opt =>
         {
-            context.Token = context.Request.Cookies["vault_session"];
-            return Task.CompletedTask;
-        }
-    };
-});
+            opt.Window = TimeSpan.FromMinutes(1);
+            opt.PermitLimit = 5;
+            opt.QueueLimit = 0;
+            opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        });
 
-//  Services
-builder.Services.AddScoped<IImageService, ImageService>();
-builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IPostService, PostService>();
-builder.Services.AddHostedService<UploadReconciliationWorker>();
-builder.Services.AddSignalR();
-builder.Services.AddControllers();
+        options.AddFixedWindowLimiter("GeneralPolicy", opt =>
+        {
+            opt.Window = TimeSpan.FromMinutes(1);
+            opt.PermitLimit = 60;
+            opt.QueueLimit = 0;
+            opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        });
 
-//  Swagger
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(opt =>
-{
-    opt.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        In = ParameterLocation.Header,
-        Description = "Enter your JWT token"
+        //  Custom rejection response instead of empty 429
+        options.OnRejected = async (context, token) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            await context.HttpContext.Response.WriteAsJsonAsync(
+                new { error = "Too many requests. Please slow down." }, token);
+        };
     });
 
-    opt.AddSecurityRequirement(new OpenApiSecurityRequirement
+    // JWT — null-safe, fails fast at startup
+    var jwtKey = builder.Configuration["Jwt:Key"]
+        ?? throw new InvalidOperationException("JWT key is not configured. Add 'Jwt:Key' to appsettings.");
+
+    builder.Services.AddAuthentication(options =>
     {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            new OpenApiSecurityScheme
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
             {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] {}
-        }
+                context.Token = context.Request.Cookies["vault_session"];
+                return Task.CompletedTask;
+            }
+        };
     });
-});
 
+    // Services
+    builder.Services.AddScoped<IImageService, ImageService>();
+    builder.Services.AddScoped<ITokenService, TokenService>();
+    builder.Services.AddScoped<IPostService, PostService>();
+    builder.Services.AddHostedService<UploadReconciliationWorker>();
+    builder.Services.AddSignalR();
+    builder.Services.AddControllers();
 
-var frontendUrl = builder.Configuration["Frontend:Url"]
-    ?? throw new InvalidOperationException("Frontend URL is not configured. Add 'Frontend:Url' to appsettings.");
+    //  Health Checks — pings DB to confirm real connectivity
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<AppDbContext>();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("VogueVaultPolicy", policy =>
+    // Swagger
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen(opt =>
     {
-        policy.WithOrigins(frontendUrl)
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
+        opt.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "Enter your JWT token"
+        });
+
+        opt.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                new string[] {}
+            }
+        });
     });
-});
 
-var app = builder.Build();
+    // CORS
+    var frontendUrl = builder.Configuration["Frontend:Url"]
+        ?? throw new InvalidOperationException("Frontend URL is not configured. Add 'Frontend:Url' to appsettings.");
 
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("VogueVaultPolicy", policy =>
+        {
+            policy.WithOrigins(frontendUrl)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        });
+    });
 
-app.UseCors("VogueVaultPolicy"); // Must be before Auth
+    var app = builder.Build();
 
-//  Swagger only in development
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    //  Global Exception Handler — MUST be first in pipeline
+    app.UseExceptionHandler(appError =>
+    {
+        appError.Run(async context =>
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "An unexpected error occurred. Please try again later."
+            });
+        });
+    });
+
+    app.UseCors("VogueVaultPolicy");
+
+    //  Serilog HTTP request logging
+    app.UseSerilogRequestLogging();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseRateLimiter();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    // Apply GeneralPolicy to ALL controller endpoints globally
+    app.MapControllers().RequireRateLimiting("GeneralPolicy");
+    app.MapHub<UploadHub>("/hubs/upload");
+
+    //  Health check endpoint
+    app.MapHealthChecks("/health");
+
+    app.Run();
 }
-
-app.UseHttpsRedirection();
-app.UseRateLimiter();
-app.UseAuthentication(); // Must be before Authorization
-app.UseAuthorization();
-app.MapControllers();
-app.MapHub<UploadHub>("/hubs/upload");
-
-app.Run();
+catch (Exception ex)
+{
+    //  Catches fatal startup crashes and logs them clearly
+    Log.Fatal(ex, "VogueVault backend terminated unexpectedly.");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

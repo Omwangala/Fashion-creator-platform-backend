@@ -81,7 +81,7 @@ namespace backend.Controllers
                 return Unauthorized(new { message = "Invalid credentials provided." });
             }
 
-            var token = _tokenService.CreateToken(user.Username);
+            var token = _tokenService.CreateToken(user.Id, user.Username);
             AppendAuthCookie(token);
 
             return Ok(new { message = "Access Granted." });
