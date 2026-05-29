@@ -2,6 +2,7 @@ using backend.Data;
 using backend.Services;
 using CloudinaryDotNet;
 using backend.Config;
+using backend.Hubs;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -101,6 +102,8 @@ builder.Services.AddSwaggerGen(opt =>
         }
     });
 });
+builder.Services.AddHostedService<UploadReconciliationWorker>();
+builder.Services.AddSignalR();
 builder.Services.AddCors(options => {
     options.AddPolicy("VogueVaultPolicy", policy => {
         policy.WithOrigins("frontendUrl") 
@@ -125,5 +128,6 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<UploadHub>("/hubs/upload");
 
 app.Run(); // The app must end here
