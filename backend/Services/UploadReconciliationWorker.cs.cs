@@ -8,9 +8,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
-using System.Security.AccessControl;
+using CloudinaryResourceType = CloudinaryDotNet.Actions.ResourceType;
 using System.Threading;
 using System.Threading.Tasks;
+
 
 namespace backend.Services
 {
@@ -56,8 +57,10 @@ namespace backend.Services
                     {
                         var getResourceParams = new GetResourceParams(post.PublicId)
                         {
-                            ResourceType = post.MediaType == "video" ? ResourceType.Video : ResourceType.Image
-                        };
+                            ResourceType = post.MediaType == "video"
+                                ? CloudinaryResourceType.Video   
+                                : CloudinaryResourceType.Image  
+                                                };
 
                         var resourceResult = await _cloudinary.GetResourceAsync(getResourceParams);
 

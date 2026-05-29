@@ -1,7 +1,10 @@
+using backend.DTOs;
+using Microsoft.AspNetCore.Http;
+
 namespace backend.Services
 {
     public interface IImageService
     {
-        Task<string> UploadImageAsync(IFormFile file);
+        Task<UploadResultDto> UploadImageAsync(IFormFile file);
     }
 }

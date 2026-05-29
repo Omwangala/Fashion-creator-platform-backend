@@ -35,6 +35,9 @@ namespace backend.Services
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
+            
+            var user = await _context.Users.FindAsync(dto.UserId);
+
             return new PostResponseDto
             {
                 Id = post.Id,
@@ -42,7 +45,7 @@ namespace backend.Services
                 Caption = post.Caption,
                 MediaType = post.MediaType,
                 CreatedAt = post.CreatedAt,
-                Username = "Vogue Creator"
+                Username = user?.Username ?? "Unknown" 
             };
         }
 
@@ -67,19 +70,19 @@ namespace backend.Services
                     Caption = p.Caption,
                     MediaType = p.MediaType,
                     CreatedAt = p.CreatedAt,
-                    Username = p.User != null ? p.User.Username : "Vogue Creator"
+                    Username = p.User != null ? p.User.Username : "Unknown" 
                 })
                 .ToListAsync();
         }
 
-        public async Task<PostResponseDto> GetPostByIdAsync(int id)
+        public async Task<PostResponseDto?> GetPostByIdAsync(int id) 
         {
             var post = await _context.Posts
                 .AsNoTracking()
                 .Include(p => p.User)
                 .FirstOrDefaultAsync(p => p.Id == id);
 
-            if (post == null) return null!;
+            if (post == null) return null; 
 
             return new PostResponseDto
             {
@@ -88,7 +91,7 @@ namespace backend.Services
                 Caption = post.Caption,
                 MediaType = post.MediaType,
                 CreatedAt = post.CreatedAt,
-                Username = p.User != null ? p.User.Username : "Vogue Creator"
+                Username = post.User?.Username ?? "Unknown" 
             };
         }
     }

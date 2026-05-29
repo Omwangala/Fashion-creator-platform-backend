@@ -9,6 +9,6 @@ namespace backend.Services
     {
         Task<PostResponseDto> CreatePostAsync(CreatePostDto dto);
         Task<List<PostResponseDto>> GetAllPostsAsync(DateTime? before, int pageSize);
-        Task<PostResponseDto> GetPostByIdAsync(int id);
+        Task<PostResponseDto?> GetPostByIdAsync(int id); 
     }
 }
