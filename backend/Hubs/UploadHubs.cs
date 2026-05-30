@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using System;
-using System.Runtime.Remoting.Contexts;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using System;
 
 namespace backend.Hubs
 {

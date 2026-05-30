@@ -1,13 +1,11 @@
 ﻿using backend.Models; // 👈 Correct namespace
+using System.ComponentModel.DataAnnotations;
 
 namespace backend.DTOs
 {
-    using backend.Models;
-    using System.ComponentModel.DataAnnotations;
-    using System.Runtime.Remoting.Activation;
+   
 
-    namespace backend.DTOs
-    {
+    
         public class CreatePostDto
         {
             [Required(ErrorMessage = "Media URL is required")]
@@ -32,5 +30,5 @@ namespace backend.DTOs
             [Range(1, int.MaxValue, ErrorMessage = "UserId must be a positive integer")]
             public int UserId { get; set; }
         }
-    }
+    
 }

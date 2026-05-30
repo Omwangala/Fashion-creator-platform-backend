@@ -1,11 +1,11 @@
-﻿using System;
+﻿using backend.Data;
+using backend.DTOs;          // 👈 CreatePostDto, PostResponseDto
+using backend.Models;
+using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using backend.Data;
-using backend.DTOs;
-using backend.Models;
-using Microsoft.EntityFrameworkCore;
 
 namespace backend.Services
 {
@@ -51,11 +51,11 @@ namespace backend.Services
 
         private const int MaxPageSize = 50;
 
-        public async Task<List<PostResponseDto>> GetAllPostsAsync(DateTime? before, int pageSize)
+        public async Task<object> GetAllPostsAsync(DateTime? before, int pageSize)
         {
             pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
-            return await _context.Posts
+            var posts = await _context.Posts
                 .AsNoTracking()
                 .Include(p => p.User)
                 .Where(p => p.Status == UploadStatus.Ready
@@ -73,6 +73,13 @@ namespace backend.Services
                     Username = p.User != null ? p.User.Username : "Unknown"
                 })
                 .ToListAsync();
+
+            return new
+            {
+                Data = posts,
+                HasMore = posts.Count == pageSize,                    // If we got a full page, there's likely more
+                NextCursor = posts.LastOrDefault()?.CreatedAt         // Frontend passes this as ?before= on next call
+            };
         }
 
         public async Task<PostResponseDto?> GetPostByIdAsync(int id) 

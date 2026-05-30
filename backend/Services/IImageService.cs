@@ -7,6 +7,6 @@ namespace backend.Services
     public interface IImageService
     {
         Task<UploadResultDto> UploadImageAsync(IFormFile file);
-        Task DeleteImageAsync(string publicId);
+        
     }
 }

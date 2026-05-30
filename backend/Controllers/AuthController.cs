@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.Tasks;
 using backend.Data;
+using System.Security.Claims;
 using backend.Models;
 using backend.Services;
 using backend.DTOs; // <--- This points to your new separate DTO files
@@ -45,14 +46,14 @@ namespace backend.Controllers
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password);
 
-            var user = new User
+            var newUser = new User  // 👈 Renamed from 'user' to 'newUser' — fixes duplicate variable
             {
-                Username = registerDto.Username, // Keep original casing for display if you like
-                Email = normalizedEmail,         // Store normalized for lookups
+                Username = normalizedUsername,
+                Email = normalizedEmail,
                 PasswordHash = passwordHash
             };
 
-            _context.Users.Add(user);
+            _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Access credentials created." });

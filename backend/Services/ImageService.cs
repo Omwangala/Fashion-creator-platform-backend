@@ -3,6 +3,8 @@ using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.AspNetCore.Http;
 using System;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace backend.Services
@@ -32,19 +34,15 @@ namespace backend.Services
 
         public async Task<UploadResultDto> UploadImageAsync(IFormFile file)
         {
-            // ? 1. Null/empty check
             if (file == null || file.Length == 0)
                 throw new Exception("No file provided.");
 
-            // ? 2. File size check FIRST (before anything else)
             if (file.Length > 52_428_800)
                 throw new Exception("File size exceeds the 50MB limit.");
 
-            // ? 3. MIME type check
             if (!AllowedContentTypes.Contains(file.ContentType.ToLower()))
-                throw new Exception("File type not allowed. Only JPEG, PNG, WebP, and MP4 are accepted.");
+                throw new Exception("File type not allowed. Only JPEG, PNG, WebP, MP4, and MOV are accepted.");
 
-            // ? 4. Extension check (double validation — MIME can be spoofed)
             var extension = Path.GetExtension(file.FileName).ToLower();
             if (!AllowedExtensions.Contains(extension))
                 throw new Exception("File extension not allowed.");
@@ -53,7 +51,7 @@ namespace backend.Services
             {
                 await using var stream = file.OpenReadStream();
 
-                RawUploadResult result;
+                RawUploadResult result;  // 👈 Declare ONCE outside the if/else
 
                 if (file.ContentType.StartsWith("video/"))
                 {
@@ -61,7 +59,7 @@ namespace backend.Services
                     {
                         File = new FileDescription(file.FileName, stream)
                     };
-                    result = await _cloudinary.UploadAsync(videoParams);
+                    result = await _cloudinary.UploadAsync(videoParams);  // 👈 Assign inside branch
                 }
                 else
                 {
@@ -69,13 +67,8 @@ namespace backend.Services
                     {
                         File = new FileDescription(file.FileName, stream)
                     };
-                    result = await _cloudinary.UploadAsync(imageParams);
+                    result = await _cloudinary.UploadAsync(imageParams);  // 👈 Assign inside branch
                 }
-
-                if (result.Error != null)
-                    throw new Exception(result.Error.Message);
-
-                var result = await _cloudinary.UploadAsync(uploadParams);
 
                 if (result.Error != null)
                     throw new Exception(result.Error.Message);
@@ -88,21 +81,9 @@ namespace backend.Services
             }
             catch (Exception ex)
             {
-                // ✅ Preserves original stack trace
                 throw new Exception("Image upload failed.", innerException: ex);
             }
         }
-        public async Task DeleteImageAsync(string publicId)
-        {
-            var deleteParams = new DeletionParams(publicId);
-            await _cloudinary.DestroyAsync(deleteParams);
-
-            if (result.Result != "ok")
-            {
-                _logger.LogWarning(
-                    "Cloudinary deletion may have failed for PublicId {PublicId}. Result: {Result}",
-                    publicId, result.Result);
-            }
-        }
+        
     }
 }

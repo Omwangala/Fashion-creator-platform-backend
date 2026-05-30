@@ -1,9 +1,11 @@
+﻿using System.ComponentModel.DataAnnotations;  // 👈 [Required], [MaxLength], [RegularExpression]
+using Microsoft.AspNetCore.Http;
+
 public class PostCreationRequest
 {
-    public class PostCreationRequest
-    {
+    
         [Required]
-        public IFormFile File { get; set; } = null!;
+        public IFormFile MediaFile { get; set; } = null!;
 
         [MaxLength(2200)]
         public string Caption { get; set; } = string.Empty;
@@ -11,5 +13,5 @@ public class PostCreationRequest
         [Required]
         [RegularExpression("^(image|video)$")]
         public string MediaType { get; set; } = string.Empty;
-    };
+    
 }
