@@ -52,6 +52,10 @@ namespace backend.Data
             modelBuilder.Entity<ProcessedWebhookEvent>()
                 .Property(e => e.Id)
                 .ValueGeneratedNever();
+
+            modelBuilder.Entity<Post>()
+                .HasIndex(p => new { p.Status, p.CreatedAt })
+                .HasDatabaseName("IX_Post_Status_CreatedAt");
         }
     }
 }

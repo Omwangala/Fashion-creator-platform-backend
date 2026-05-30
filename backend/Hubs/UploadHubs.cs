@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System;
+using System.Runtime.Remoting.Contexts;
 using System.Threading.Tasks;
 
 namespace backend.Hubs
@@ -10,21 +11,19 @@ namespace backend.Hubs
     {
         public override async Task OnConnectedAsync()
         {
-            var username = Context.User?.Identity?.Name;
-            if (!string.IsNullOrEmpty(username))
-            {
-                await Groups.AddToGroupAsync(Context.ConnectionId, username);
-            }
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"user-{userId}");
+
             await base.OnConnectedAsync();
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            var username = Context.User?.Identity?.Name;
-            if (!string.IsNullOrEmpty(username))
-            {
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, username);
-            }
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user-{userId}");
+
             await base.OnDisconnectedAsync(exception);
         }
     }

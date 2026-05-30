@@ -32,10 +32,15 @@ namespace backend.Controllers
             var normalizedEmail = registerDto.Email.ToLower().Trim();
             var normalizedUsername = registerDto.Username.ToLower().Trim();
 
-            if (await _context.Users.AnyAsync(u => u.Username.ToLower() == normalizedUsername))
+            var user = new User
+            {
+                Username = normalizedUsername, // ✅ Store normalized, display as-is on frontend
+                Email = normalizedEmail,
+            };
+            if (await _context.Users.AnyAsync(u => u.Username == normalizedUsername))
                 return BadRequest(new { message = "Identity already archived." });
 
-            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
+            if (await _context.Users.AnyAsync(u => u.Email == normalizedEmail))
                 return BadRequest(new { message = "Email already in use." });
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password);
@@ -54,16 +59,15 @@ namespace backend.Controllers
         }
         [Authorize]
         [HttpGet("me")]
-        public async Task<IActionResult> GetCurrentUser()
+        public IActionResult GetCurrentUser()
         {
-            var username = User.Identity?.Name;
-            var user = await _context.Users
-                .Select(u => new { u.Id, u.Username, u.Email })
-                .FirstOrDefaultAsync(u => u.Username == username);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var username = User.FindFirst(ClaimTypes.Name)?.Value;
 
-            if (user == null) return Unauthorized();
+            if (userId == null || username == null)
+                return Unauthorized();
 
-            return Ok(user);
+            return Ok(new { Id = userId, Username = username });
         }
         [EnableRateLimiting("LoginPolicy")]
         [HttpPost("login")]
@@ -89,7 +93,12 @@ namespace backend.Controllers
         [HttpPost("logout")]
         public IActionResult Logout()
         {
-            Response.Cookies.Delete("vault_session"); // Must match your cookie name
+            Response.Cookies.Delete("vault_session", new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict
+            });
             return NoContent();
         }
 

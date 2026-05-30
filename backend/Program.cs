@@ -92,8 +92,10 @@ try
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
             ClockSkew = TimeSpan.Zero
         };
 
@@ -101,7 +103,18 @@ try
         {
             OnMessageReceived = context =>
             {
-                context.Token = context.Request.Cookies["vault_session"];
+                // HTTP requests — read from cookie
+                var cookieToken = context.Request.Cookies["vault_session"];
+
+                // SignalR connections — read from query string
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                    context.Token = accessToken;
+                else
+                    context.Token = cookieToken;
+
                 return Task.CompletedTask;
             }
         };

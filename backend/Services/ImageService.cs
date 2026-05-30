@@ -1,4 +1,4 @@
-using backend.DTOs;
+﻿using backend.DTOs;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.AspNetCore.Http;
@@ -16,12 +16,13 @@ namespace backend.Services
             "image/jpeg",
             "image/png",
             "image/webp",
-            "video/mp4"
+            "video/mp4",
+            "video/quicktime"
         };
 
         private static readonly string[] AllowedExtensions = new[]
         {
-            ".jpg", ".jpeg", ".png", ".webp", ".mp4"
+            ".jpg", ".jpeg", ".png", ".webp", ".mp4" , ".mov"
         };
 
         public ImageService(Cloudinary cloudinary)
@@ -43,7 +44,7 @@ namespace backend.Services
             if (!AllowedContentTypes.Contains(file.ContentType.ToLower()))
                 throw new Exception("File type not allowed. Only JPEG, PNG, WebP, and MP4 are accepted.");
 
-            // ? 4. Extension check (double validation � MIME can be spoofed)
+            // ? 4. Extension check (double validation — MIME can be spoofed)
             var extension = Path.GetExtension(file.FileName).ToLower();
             if (!AllowedExtensions.Contains(extension))
                 throw new Exception("File extension not allowed.");
@@ -52,10 +53,27 @@ namespace backend.Services
             {
                 await using var stream = file.OpenReadStream();
 
-                var uploadParams = new ImageUploadParams
+                RawUploadResult result;
+
+                if (file.ContentType.StartsWith("video/"))
                 {
-                    File = new FileDescription(file.FileName, stream)
-                };
+                    var videoParams = new VideoUploadParams
+                    {
+                        File = new FileDescription(file.FileName, stream)
+                    };
+                    result = await _cloudinary.UploadAsync(videoParams);
+                }
+                else
+                {
+                    var imageParams = new ImageUploadParams
+                    {
+                        File = new FileDescription(file.FileName, stream)
+                    };
+                    result = await _cloudinary.UploadAsync(imageParams);
+                }
+
+                if (result.Error != null)
+                    throw new Exception(result.Error.Message);
 
                 var result = await _cloudinary.UploadAsync(uploadParams);
 
@@ -70,7 +88,20 @@ namespace backend.Services
             }
             catch (Exception ex)
             {
-                throw new Exception($"Image upload failed: {ex.Message}");
+                // ✅ Preserves original stack trace
+                throw new Exception("Image upload failed.", innerException: ex);
+            }
+        }
+        public async Task DeleteImageAsync(string publicId)
+        {
+            var deleteParams = new DeletionParams(publicId);
+            await _cloudinary.DestroyAsync(deleteParams);
+
+            if (result.Result != "ok")
+            {
+                _logger.LogWarning(
+                    "Cloudinary deletion may have failed for PublicId {PublicId}. Result: {Result}",
+                    publicId, result.Result);
             }
         }
     }
