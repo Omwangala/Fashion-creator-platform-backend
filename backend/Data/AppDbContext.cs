@@ -20,11 +20,38 @@ namespace backend.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // ⚡ PERFORMANCE COMPOSITE INDEX
-            // Drastically optimizes cursor-based pagination and timelines, preventing expensive table scans
+            // ── USER ──────────────────────────────────────────
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Username)
+                .IsUnique()
+                .HasDatabaseName("IX_User_Username");
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique()
+                .HasDatabaseName("IX_User_Email");
+
+            // ── POST ──────────────────────────────────────────
             modelBuilder.Entity<Post>()
                 .HasIndex(p => new { p.UserId, p.CreatedAt })
                 .HasDatabaseName("IX_Post_UserId_CreatedAt");
+
+            modelBuilder.Entity<Post>()
+                .HasIndex(p => p.PublicId)
+                .IsUnique()
+                .HasDatabaseName("IX_Post_PublicId");
+
+            modelBuilder.Entity<Post>()
+                .HasIndex(p => p.Status)
+                .HasDatabaseName("IX_Post_Status");
+
+            // ── WEBHOOK ───────────────────────────────────────
+            modelBuilder.Entity<ProcessedWebhookEvent>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<ProcessedWebhookEvent>()
+                .Property(e => e.Id)
+                .ValueGeneratedNever();
         }
     }
 }

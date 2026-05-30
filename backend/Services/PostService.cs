@@ -49,19 +49,19 @@ namespace backend.Services
             };
         }
 
+        private const int MaxPageSize = 50;
+
         public async Task<List<PostResponseDto>> GetAllPostsAsync(DateTime? before, int pageSize)
         {
-            var queryBase = _context.Posts.AsNoTracking();
+            pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
-            if (before.HasValue)
-            {
-                queryBase = queryBase.Where(p => p.CreatedAt < before.Value);
-            }
-
-            return await queryBase
+            return await _context.Posts
+                .AsNoTracking()
+                .Include(p => p.User)
+                .Where(p => p.Status == UploadStatus.Ready
+                         && (!before.HasValue || p.CreatedAt < before.Value))
                 .OrderByDescending(p => p.CreatedAt)
                 .Take(pageSize)
-                .Include(p => p.User)
                 .AsSplitQuery()
                 .Select(p => new PostResponseDto
                 {
@@ -70,7 +70,7 @@ namespace backend.Services
                     Caption = p.Caption,
                     MediaType = p.MediaType,
                     CreatedAt = p.CreatedAt,
-                    Username = p.User != null ? p.User.Username : "Unknown" 
+                    Username = p.User != null ? p.User.Username : "Unknown"
                 })
                 .ToListAsync();
         }
