@@ -30,7 +30,7 @@ jobs:
         run: dotnet test backend.Tests/backend.Tests.csproj --no-build --configuration Release --verbosity normal
         env:
           ASPNETCORE_ENVIRONMENT: Testing
-          Jwt__Key: ${{ secrets.JWT_KEY }}
+          Jwt__Key: "test-jwt-key-that-is-long-enough-32chars!!" 
           Jwt__Issuer: voguevault-api
           Jwt__Audience: voguevault-client
           Jwt__ExpiryDays: 7
