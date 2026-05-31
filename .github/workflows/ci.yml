@@ -1,0 +1,57 @@
+name: VogueVault CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore VogueVault.sln
+
+      - name: Build
+        run: dotnet build VogueVault.sln --no-restore --configuration Release
+
+      - name: Run unit tests
+        run: dotnet test backend.Tests/backend.Tests.csproj --no-build --configuration Release --verbosity normal
+        env:
+          ASPNETCORE_ENVIRONMENT: Testing
+          Jwt__Key: ${{ secrets.JWT_KEY }}
+          Jwt__Issuer: voguevault-api
+          Jwt__Audience: voguevault-client
+          Jwt__ExpiryDays: 7
+          Frontend__Url: https://localhost:4200
+          CloudinarySettings__CloudName: testcloud
+          CloudinarySettings__ApiKey: testkey
+          CloudinarySettings__ApiSecret: testsecret
+
+      - name: Run integration tests
+        run: dotnet test backend.IntegrationTests/backend.IntegrationTests.csproj --no-build --configuration Release --verbosity normal
+        env:
+          ASPNETCORE_ENVIRONMENT: Testing
+          Jwt__Key: ${{ secrets.JWT_KEY }}
+          Jwt__Issuer: voguevault-api
+          Jwt__Audience: voguevault-client
+          Jwt__ExpiryDays: 7
+          Frontend__Url: https://localhost:4200
+          CloudinarySettings__CloudName: testcloud
+          CloudinarySettings__ApiKey: testkey
+          CloudinarySettings__ApiSecret: testsecret
+
+      - name: Publish test results
+        if: always()
+        run: echo "Tests completed"
