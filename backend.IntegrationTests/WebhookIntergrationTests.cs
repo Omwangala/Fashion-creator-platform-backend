@@ -60,7 +60,7 @@ namespace backend.IntegrationTests
             };
             var body = JsonSerializer.Serialize(payload);
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-            var secret = "test-cloud-secret";
+            var secret = "testsecret";
             var signature = ComputeSignature(body, timestamp, secret);
 
             var req = new HttpRequestMessage(HttpMethod.Post, "/api/webhook/cloudinary")
