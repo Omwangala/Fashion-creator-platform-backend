@@ -1,3 +1,22 @@
+# --- Existing ---
 bin/
 obj/
 .vs/
+node_modules/
+dist/
+.env
+
+# --- CRITICAL SECURITY ---
+# Never push the files containing your real keys/passwords
+appsettings.json
+appsettings.Development.json
+
+# --- .NET SPECIFIC ---
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# --- OS SPECIFIC ---
+.DS_Store
+Thumbs.db

@@ -1,24 +1,27 @@
-﻿using backend.Data;
+﻿using backend.Config;
+using backend.Data;
+using backend.Hubs;
 using backend.Services;
 using CloudinaryDotNet;
-using backend.Config;
-using backend.Hubs;
-using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using System.Text;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
-using System.Threading.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Serilog;
+using System;
+using System.Text;
+using System.Threading.RateLimiting;
 
 //  Bootstrap Serilog immediately — catches startup crashes too
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .CreateBootstrapLogger();
-
+if (Log.Logger is not Serilog.Core.Logger)
+{
+    Log.Logger = new LoggerConfiguration()
+        .WriteTo.Console()
+        .CreateBootstrapLogger();
+}
 try
 {
     Log.Information("VogueVault backend starting up...");
@@ -26,13 +29,24 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // ✅ 2. Replace default .NET logging with Serilog
-    builder.Host.UseSerilog((ctx, config) =>
-        config.WriteTo.Console()
-              .ReadFrom.Configuration(ctx.Configuration));
+    if (!builder.Environment.IsEnvironment("Testing"))
+    {
+        builder.Host.UseSerilog((ctx, config) =>
+            config.WriteTo.Console()
+                  .ReadFrom.Configuration(ctx.Configuration));
+    }
 
     // Database
-    builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    if (builder.Environment.IsEnvironment("Testing"))
+    {
+        builder.Services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase("SharedTestDb"));
+    }
+    else
+    {
+        builder.Services.AddDbContext<AppDbContext>(options =>
+            options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    }
 
     // Cloudinary
     builder.Services.Configure<CloudinarySettings>(
@@ -78,7 +92,8 @@ try
 
     // JWT — null-safe, fails fast at startup
     var jwtKey = builder.Configuration["Jwt:Key"]
-        ?? throw new InvalidOperationException("JWT key is not configured. Add 'Jwt:Key' to appsettings.");
+        ?? (builder.Environment.IsEnvironment("Testing") ? "test-key-placeholder"
+        : throw new InvalidOperationException("JWT key is not configured."));
 
     builder.Services.AddAuthentication(options =>
     {
@@ -164,7 +179,8 @@ try
 
     // CORS
     var frontendUrl = builder.Configuration["Frontend:Url"]
-        ?? throw new InvalidOperationException("Frontend URL is not configured. Add 'Frontend:Url' to appsettings.");
+        ?? (builder.Environment.IsEnvironment("Testing") ? "https://localhost:4200"
+        : throw new InvalidOperationException("Frontend URL is not configured."));
 
     builder.Services.AddCors(options =>
     {
@@ -196,7 +212,10 @@ try
     app.UseCors("VogueVaultPolicy");
 
     //  Serilog HTTP request logging
-    app.UseSerilogRequestLogging();
+    if (!app.Environment.IsEnvironment("Testing"))
+    {
+        app.UseSerilogRequestLogging();
+    }
 
     if (app.Environment.IsDevelopment())
     {
@@ -217,13 +236,21 @@ try
     app.MapHealthChecks("/health");
 
     app.Run();
+
+    
 }
-catch (Exception ex)
+catch (Exception ex) when (ex is not OperationCanceledException
+                         && ex.GetType().Name != "StopTheHostException")
 {
-    //  Catches fatal startup crashes and logs them clearly
     Log.Fatal(ex, "VogueVault backend terminated unexpectedly.");
+
+    // ✅ Rethrow so WebApplicationFactory can see the failure
+    // In production this still terminates the process — same behavior
+    throw;
 }
 finally
 {
     Log.CloseAndFlush();
 }
+// Makes Program class accessible to integration test project
+public partial class Program { }
